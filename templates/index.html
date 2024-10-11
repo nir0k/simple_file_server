@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>File Manager</title>
+    <!-- Materialize CSS -->
+    <link rel="stylesheet" href="/static/css/materialize.min.css">
+    <!-- Material Icons -->
+    <link rel="stylesheet" href="/static/css/material-icons.css">
+    <!-- Custom CSS -->
+    <link rel="icon" href="/static/icons/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="icon" href="/static/icons/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="icon" href="/static/icons/favicon-48x48.png" sizes="48x48" type="image/png">
+    <link rel="icon" href="/static/icons/favicon.ico" type="image/x-icon">
+    
+    <style>
+        body {
+            padding: 20px;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .navigation {
+            margin-bottom: 20px;
+        }
+        .upload-form {
+            margin-top: 40px;
+        }
+        .checkbox-column {
+            width: 50px;
+            text-align: center;
+        }
+        .icon-column {
+            width: 50px;
+            text-align: center;
+        }
+        .file-icon {
+            vertical-align: middle;
+        }
+        .file-name {
+            vertical-align: middle;
+        }
+        /* Темные и светлые темы */
+        body.light-theme {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        body.dark-theme {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        .dark-theme .nav-wrapper {
+            background-color: #1e1e1e;
+        }
+        .dark-theme .breadcrumb {
+            color: #ffffff;
+        }
+        .dark-theme table.striped > tbody > tr:nth-child(odd) {
+            background-color: #1e1e1e;
+        }
+        .dark-theme table.striped > tbody > tr:nth-child(even) {
+            background-color: #2e2e2e;
+        }
+        .dark-theme .modal {
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        /* Стили для настройки размеров столбцов */
+        th.resizable {
+            position: relative;
+        }
+        th.resizable .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: col-resize;
+        }
+
+        /* Стили для хлебных крошек */
+        .breadcrumb-nav .nav-wrapper {
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+
+        /* Замена разделителя в хлебных крошках на '>' */
+        .breadcrumb::before {
+            content: '>';
+            margin: 0 8px;
+        }
+
+        /* Цвет разделителя и текста для светлой темы */
+        .light-theme .breadcrumb-nav .nav-wrapper {
+            background-color: #f5f5f5; /* Светлый фон для светлой темы */
+        }
+
+        .light-theme .breadcrumb::before {
+            color: rgba(0, 0, 0, 0.54); /* Тёмный цвет разделителя для светлой темы */
+        }
+
+        .light-theme .breadcrumb {
+            color: #000000; /* Тёмный цвет текста для светлой темы */
+        }
+
+        /* Цвет разделителя и текста для тёмной темы */
+        .dark-theme .breadcrumb-nav .nav-wrapper {
+            background-color: #2e2e2e; /* Тёмный фон для тёмной темы */
+        }
+
+        .dark-theme .breadcrumb::before {
+            color: rgba(255, 255, 255, 0.7); /* Светлый цвет разделителя для тёмной темы */
+        }
+
+        .dark-theme .breadcrumb {
+            color: #ffffff; /* Светлый цвет текста для тёмной темы */
+        }
+
+
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-wrapper">
+            <a href="#" class="brand-logo center">File Manager</a>
+            <!-- Кнопки в правой части навигации -->
+            <ul id="nav-mobile" class="right">
+                <li>
+                    <a href="#" id="themeToggle">
+                        <i class="material-icons">brightness_6</i>
+                    </a>
+                </li>
+                <li>
+                    <a href="/logout">
+                        <i class="material-icons">exit_to_app</i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Хлебные крошки -->
+        <nav class="breadcrumb-nav">
+            <div class="nav-wrapper">
+                <div class="col s12">
+                    {{ $pathParts := splitPath .Path }}
+                    {{ $fullPath := "" }}
+                    <a href="/" class="breadcrumb">Home</a>
+                    {{ range $index, $element := $pathParts }}
+                        {{ if $element }}
+                            {{ $fullPath = joinPath $fullPath $element }}
+                            <a href="{{ $fullPath }}/" class="breadcrumb">{{ $element }}</a>
+                        {{ end }}
+                    {{ end }}
+                </div>
+            </div>
+        </nav>
+
+
+        <!-- Кнопки -->
+        <div style="margin-top: 20px;">
+            <a class="waves-effect waves-light btn modal-trigger" href="#uploadModal">Upload Files</a>
+            <a class="waves-effect waves-light btn modal-trigger" href="#createFolderModal">Create Folder</a>
+            <button id="deleteButton" class="btn red" disabled>Delete</button>
+        </div>
+
+        <!-- Таблица файлов -->
+        <form id="fileForm" method="post">
+            <input type="hidden" name="currentPath" value="{{.Path}}">
+            <table id="fileTable" class="striped">
+                <thead>
+                    <tr>
+                        <th class="checkbox-column resizable">
+                            <label>
+                                <input type="checkbox" id="selectAll">
+                                <span></span>
+                            </label>
+                            <div class="resize-handle"></div>
+                        </th>
+                        <th class="icon-column resizable">
+                            <div class="resize-handle"></div>
+                        </th>
+                        <th class="resizable">Name
+                            <div class="resize-handle"></div>
+                        </th>
+                        <th class="resizable">Size
+                            <div class="resize-handle"></div>
+                        </th>
+                        <th class="resizable">Type
+                            <div class="resize-handle"></div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{if ne .Path "/"}}
+                    <tr>
+                        <td></td>
+                        <td class="icon-column">
+                            <i class="material-icons">folder</i>
+                        </td>
+                        <td>
+                            <a href="{{.ParentDir}}">..</a>
+                        </td>
+                        <td></td>
+                        <td>Folder</td>
+                    </tr>
+                    {{end}}
+                    {{range .Files}}
+                    <tr>
+                        <td class="checkbox-column">
+                            <label>
+                                <input type="checkbox" name="items" value="{{$.Path}}{{.Name}}" class="item-checkbox" data-type="{{if .IsDir}}dir{{else}}file{{end}}">
+                                <span></span>
+                            </label>
+                        </td>
+                        <td class="icon-column">
+                            {{if .IsDir}}
+                                <i class="material-icons">folder</i>
+                            {{else}}
+                                {{ $icon := getFileIcon .Name }}
+                                <i class="material-icons">{{ $icon }}</i>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if .IsDir}}
+                            <a href="{{$.Path}}{{.Name}}/">{{.Name}}/</a>
+                            {{else}}
+                            <a href="{{$.Path}}{{.Name}}">{{.Name}}</a>
+                            {{end}}
+                        </td>
+                        <td>
+                            {{if not .IsDir}}
+                                {{ readableSize (getFileInfo $.FullPath .Name) }}
+                            {{end}}
+                        </td>
+                        <td>{{if .IsDir}}Folder{{else}}File{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            <button type="submit" id="downloadButton" class="btn green" disabled>Download Selected Files</button>
+        </form>
+
+        <!-- Модальные окна остаются без изменений -->
+        <!-- Upload Modal -->
+        <div id="uploadModal" class="modal">
+            <div class="modal-content">
+                <h5>Upload Files</h5>
+                <form method="post" enctype="multipart/form-data" action="/upload">
+                    <input type="hidden" name="currentPath" value="{{.Path}}">
+                    <div class="file-field input-field">
+                        <div class="btn">
+                            <span>Select Files</span>
+                            <input type="file" name="uploadFiles" multiple>
+                        </div>
+                        <div class="file-path-wrapper">
+                            <input class="file-path validate" type="text" placeholder="Select files">
+                        </div>
+                    </div>
+                    <button type="submit" class="modal-close btn blue">Upload</button>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <a href="#!" class="modal-close waves-effect waves-green btn-flat">Cancel</a>
+            </div>
+        </div>
+
+        <!-- Create Folder Modal -->
+        <div id="createFolderModal" class="modal">
+            <div class="modal-content">
+                <h5>Create New Folder</h5>
+                <form method="post" action="/create-folder">
+                    <input type="hidden" name="currentPath" value="{{.Path}}">
+                    <div class="input-field">
+                        <input type="text" name="folderName" id="folderName" required>
+                        <label for="folderName">Folder Name</label>
+                    </div>
+                    <button type="submit" class="modal-close btn blue">Create</button>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <a href="#!" class="modal-close waves-effect waves-green btn-flat">Cancel</a>
+            </div>
+        </div>
+        <!-- Добавьте ваши существующие модальные окна здесь -->
+
+    </div>
+
+    <!-- Materialize JS -->
+    <script src="/static/js/materialize.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Инициализация модальных окон
+            var modals = document.querySelectorAll('.modal');
+            M.Modal.init(modals);
+
+            // Инициализация чекбоксов
+            var selectAllCheckbox = document.getElementById('selectAll');
+            var itemCheckboxes = document.querySelectorAll('.item-checkbox');
+            var downloadButton = document.getElementById('downloadButton');
+            var deleteButton = document.getElementById('deleteButton');
+            var fileForm = document.getElementById('fileForm');
+
+            function updateButtons() {
+                var anyChecked = document.querySelectorAll('.item-checkbox:checked').length > 0;
+                var anyFileChecked = document.querySelectorAll('.item-checkbox[data-type="file"]:checked').length > 0;
+                downloadButton.disabled = !anyFileChecked;
+                deleteButton.disabled = !anyChecked;
+            }
+
+            selectAllCheckbox.addEventListener('change', function() {
+                var checked = this.checked;
+                itemCheckboxes.forEach(function(checkbox) {
+                    checkbox.checked = checked;
+                });
+                updateButtons();
+            });
+
+            itemCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function() {
+                    if (!this.checked) {
+                        selectAllCheckbox.checked = false;
+                    } else if (document.querySelectorAll('.item-checkbox:checked').length === itemCheckboxes.length) {
+                        selectAllCheckbox.checked = true;
+                    }
+                    updateButtons();
+                });
+            });
+
+            // Обработчик кнопки скачивания
+            fileForm.addEventListener('submit', function(event) {
+                var anyFileChecked = document.querySelectorAll('.item-checkbox[data-type="file"]:checked').length > 0;
+                if (!anyFileChecked) {
+                    event.preventDefault();
+                } else {
+                    fileForm.action = '/download';
+                    fileForm.method = 'post';
+                }
+            });
+
+            // Обработчик кнопки удаления
+            deleteButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                fileForm.action = '/delete';
+                fileForm.method = 'post';
+                fileForm.submit();
+            });
+
+            // Обновление состояния кнопок при загрузке страницы
+            updateButtons();
+
+            // Инициализация переключателя темы
+            var themeToggle = document.getElementById('themeToggle');
+            var body = document.body;
+
+            // Функция для установки темы
+            function setTheme(theme) {
+                if (theme === 'dark') {
+                    body.classList.remove('light-theme');
+                    body.classList.add('dark-theme');
+                } else {
+                    body.classList.remove('dark-theme');
+                    body.classList.add('light-theme');
+                }
+                localStorage.setItem('theme', theme);
+            }
+
+            // Получаем сохраненную тему из localStorage
+            var savedTheme = localStorage.getItem('theme') || 'light';
+            setTheme(savedTheme);
+
+            themeToggle.addEventListener('click', function(event) {
+                event.preventDefault();
+                var currentTheme = body.classList.contains('dark-theme') ? 'dark' : 'light';
+                var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setTheme(newTheme);
+            });
+
+            // Инициализация изменения размеров столбцов
+            var thElements = document.querySelectorAll('th.resizable');
+            thElements.forEach(function(th) {
+                var handle = th.querySelector('.resize-handle');
+                if (handle) {
+                    handle.addEventListener('mousedown', initResize);
+                }
+            });
+
+            function initResize(e) {
+                var th = e.target.parentElement;
+                var startX = e.clientX;
+                var startWidth = th.offsetWidth;
+
+                function doResize(e) {
+                    var newWidth = startWidth + (e.clientX - startX);
+                    th.style.width = newWidth + 'px';
+                }
+
+                function stopResize(e) {
+                    document.removeEventListener('mousemove', doResize);
+                    document.removeEventListener('mouseup', stopResize);
+                    // Сохранение ширины столбца
+                    saveColumnWidths();
+                }
+
+                document.addEventListener('mousemove', doResize);
+                document.addEventListener('mouseup', stopResize);
+            }
+
+            // Функция сохранения ширины столбцов
+            function saveColumnWidths() {
+                var widths = [];
+                thElements.forEach(function(th) {
+                    widths.push(th.offsetWidth);
+                });
+                localStorage.setItem('columnWidths', JSON.stringify(widths));
+            }
+
+            // Функция загрузки ширины столбцов
+            function loadColumnWidths() {
+                var widths = JSON.parse(localStorage.getItem('columnWidths'));
+                if (widths) {
+                    thElements.forEach(function(th, index) {
+                        th.style.width = widths[index] + 'px';
+                    });
+                }
+            }
+
+            // Загрузка сохраненных ширин столбцов
+            loadColumnWidths();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <!-- Materihttps://github.com/google/material-design-iconsalize CSS -->
+    <link rel="stylesheet" href="/static/css/materialize.min.css">
+    <!-- Material Icons -->
+    <link rel="stylesheet" href="/static/css/material-icons.css">
+
+    <link rel="icon" href="/static/icons/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="icon" href="/static/icons/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="icon" href="/static/icons/favicon-48x48.png" sizes="48x48" type="image/png">
+    <link rel="icon" href="/static/icons/favicon.ico" type="image/x-icon">
+    
+    <style>
+        body {
+            padding: 20px;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h4 class="center-align">Login</h4>
+        {{if .Error}}
+            <div class="card-panel red lighten-2">{{.Error}}</div>
+        {{end}}
+        <form method="post" action="/login">
+            <div class="input-field">
+                <input type="text" name="username" id="username" required>
+                <label for="username">Username</label>
+            </div>
+            <div class="input-field">
+                <input type="password" name="password" id="password" required>
+                <label for="password">Password</label>
+            </div>
+            <button type="submit" class="btn waves-effect waves-light">Login</button>
+        </form>
+    </div>
+    <!-- Materialize JS -->
+    <script src="/static/js/materialize.min.js"></script>
+</body>
+</html>
