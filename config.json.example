@@ -1,7 +1,0 @@
-{
-    "base_dir": "/путь/к/вашей/директории",
-    "port": "8080",
-    "protocol": "https",
-    "ssl_cert_file": "/путь/к/сертификату/cert.pem",
-    "ssl_key_file": "/путь/к/ключу/key.pem"
-}

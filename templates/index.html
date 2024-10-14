@@ -40,7 +40,7 @@
         .file-name {
             vertical-align: middle;
         }
-        /* Темные и светлые темы */
+        /* Dark and light themes */
         body.light-theme {
             background-color: #ffffff;
             color: #000000;
@@ -65,7 +65,7 @@
             background-color: #1e1e1e;
             color: #ffffff;
         }
-        /* Стили для настройки размеров столбцов */
+        /* Styles for resizing columns */
         th.resizable {
             position: relative;
         }
@@ -78,52 +78,50 @@
             cursor: col-resize;
         }
 
-        /* Стили для хлебных крошек */
+        /* Styles for breadcrumbs */
         .breadcrumb-nav .nav-wrapper {
             padding-left: 15px;
             padding-right: 15px;
         }
 
-        /* Замена разделителя в хлебных крошках на '>' */
+        /* Replace breadcrumb separator with '>' */
         .breadcrumb::before {
             content: '>';
             margin: 0 8px;
         }
 
-        /* Цвет разделителя и текста для светлой темы */
+        /* Separator and text color for light theme */
         .light-theme .breadcrumb-nav .nav-wrapper {
-            background-color: #f5f5f5; /* Светлый фон для светлой темы */
+            background-color: #f5f5f5; /* Light background for light theme */
         }
 
         .light-theme .breadcrumb::before {
-            color: rgba(0, 0, 0, 0.54); /* Тёмный цвет разделителя для светлой темы */
+            color: rgba(0, 0, 0, 0.54); /* Dark separator color for light theme */
         }
 
         .light-theme .breadcrumb {
-            color: #000000; /* Тёмный цвет текста для светлой темы */
+            color: #000000; /* Dark text color for light theme */
         }
 
-        /* Цвет разделителя и текста для тёмной темы */
+        /* Separator and text color for dark theme */
         .dark-theme .breadcrumb-nav .nav-wrapper {
-            background-color: #2e2e2e; /* Тёмный фон для тёмной темы */
+            background-color: #2e2e2e; /* Dark background for dark theme */
         }
 
         .dark-theme .breadcrumb::before {
-            color: rgba(255, 255, 255, 0.7); /* Светлый цвет разделителя для тёмной темы */
+            color: rgba(255, 255, 255, 0.7); /* Light separator color for dark theme */
         }
 
         .dark-theme .breadcrumb {
-            color: #ffffff; /* Светлый цвет текста для тёмной темы */
+            color: #ffffff; /* Light text color for dark theme */
         }
-
-
     </style>
 </head>
 <body>
     <nav>
         <div class="nav-wrapper">
             <a href="#" class="brand-logo center">File Manager</a>
-            <!-- Кнопки в правой части навигации -->
+            <!-- Buttons on the right side of the navigation -->
             <ul id="nav-mobile" class="right">
                 <li>
                     <a href="#" id="themeToggle">
@@ -140,7 +138,7 @@
     </nav>
 
     <div class="container">
-        <!-- Хлебные крошки -->
+        <!-- Breadcrumbs -->
         <nav class="breadcrumb-nav">
             <div class="nav-wrapper">
                 <div class="col s12">
@@ -157,15 +155,14 @@
             </div>
         </nav>
 
-
-        <!-- Кнопки -->
+        <!-- Buttons -->
         <div style="margin-top: 20px;">
-            <a class="waves-effect waves-light btn modal-trigger" href="#uploadModal">Upload Files</a>
-            <a class="waves-effect waves-light btn modal-trigger" href="#createFolderModal">Create Folder</a>
+            <a href="#" class="waves-effect waves-light btn" id="uploadFilesButton">Upload Files</a>
+            <a href="#" class="waves-effect waves-light btn" id="createFolderButton">Create Folder</a>
             <button id="deleteButton" class="btn red" disabled>Delete</button>
         </div>
 
-        <!-- Таблица файлов -->
+        <!-- File table -->
         <form id="fileForm" method="post">
             <input type="hidden" name="currentPath" value="{{.Path}}">
             <table id="fileTable" class="striped">
@@ -190,6 +187,9 @@
                         <th class="resizable">Type
                             <div class="resize-handle"></div>
                         </th>
+                        <th class="resizable">Last Modified
+                            <div class="resize-handle"></div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -204,6 +204,7 @@
                         </td>
                         <td></td>
                         <td>Folder</td>
+                        <td></td>
                     </tr>
                     {{end}}
                     {{range .Files}}
@@ -235,6 +236,7 @@
                             {{end}}
                         </td>
                         <td>{{if .IsDir}}Folder{{else}}File{{end}}</td>
+                        <td class="mod-time" data-mod-time="{{ index $.ModTimes .Name }}"></td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -242,7 +244,6 @@
             <button type="submit" id="downloadButton" class="btn green" disabled>Download Selected Files</button>
         </form>
 
-        <!-- Модальные окна остаются без изменений -->
         <!-- Upload Modal -->
         <div id="uploadModal" class="modal">
             <div class="modal-content">
@@ -283,7 +284,6 @@
                 <a href="#!" class="modal-close waves-effect waves-green btn-flat">Cancel</a>
             </div>
         </div>
-        <!-- Добавьте ваши существующие модальные окна здесь -->
 
     </div>
 
@@ -291,11 +291,11 @@
     <script src="/static/js/materialize.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Инициализация модальных окон
+            // Initialize modals
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals);
 
-            // Инициализация чекбоксов
+            // Initialize checkboxes
             var selectAllCheckbox = document.getElementById('selectAll');
             var itemCheckboxes = document.querySelectorAll('.item-checkbox');
             var downloadButton = document.getElementById('downloadButton');
@@ -328,7 +328,7 @@
                 });
             });
 
-            // Обработчик кнопки скачивания
+            // Download button handler
             fileForm.addEventListener('submit', function(event) {
                 var anyFileChecked = document.querySelectorAll('.item-checkbox[data-type="file"]:checked').length > 0;
                 if (!anyFileChecked) {
@@ -339,22 +339,36 @@
                 }
             });
 
-            // Обработчик кнопки удаления
+            // Delete button handler with authorization check
             deleteButton.addEventListener('click', function(event) {
                 event.preventDefault();
-                fileForm.action = '/delete';
-                fileForm.method = 'post';
-                fileForm.submit();
+                fetch('/check-session', {
+                    method: 'GET',
+                    credentials: 'include'
+                }).then(response => {
+                    if (response.ok) {
+                        // If authorized, submit the delete form
+                        fileForm.action = '/delete';
+                        fileForm.method = 'post';
+                        fileForm.submit();
+                    } else {
+                        // Redirect to login if not authorized
+                        window.location.href = '/login';
+                    }
+                }).catch(error => {
+                    console.error('Error checking session:', error);
+                    window.location.href = '/login';
+                });
             });
 
-            // Обновление состояния кнопок при загрузке страницы
+            // Update button states on page load
             updateButtons();
 
-            // Инициализация переключателя темы
+            // Initialize theme toggle
             var themeToggle = document.getElementById('themeToggle');
             var body = document.body;
 
-            // Функция для установки темы
+            // Function to set theme
             function setTheme(theme) {
                 if (theme === 'dark') {
                     body.classList.remove('light-theme');
@@ -366,7 +380,7 @@
                 localStorage.setItem('theme', theme);
             }
 
-            // Получаем сохраненную тему из localStorage
+            // Get saved theme from localStorage
             var savedTheme = localStorage.getItem('theme') || 'light';
             setTheme(savedTheme);
 
@@ -377,7 +391,7 @@
                 setTheme(newTheme);
             });
 
-            // Инициализация изменения размеров столбцов
+            // Initialize column resizing
             var thElements = document.querySelectorAll('th.resizable');
             thElements.forEach(function(th) {
                 var handle = th.querySelector('.resize-handle');
@@ -399,7 +413,7 @@
                 function stopResize(e) {
                     document.removeEventListener('mousemove', doResize);
                     document.removeEventListener('mouseup', stopResize);
-                    // Сохранение ширины столбца
+                    // Save column width
                     saveColumnWidths();
                 }
 
@@ -407,7 +421,7 @@
                 document.addEventListener('mouseup', stopResize);
             }
 
-            // Функция сохранения ширины столбцов
+            // Function to save column widths
             function saveColumnWidths() {
                 var widths = [];
                 thElements.forEach(function(th) {
@@ -416,7 +430,7 @@
                 localStorage.setItem('columnWidths', JSON.stringify(widths));
             }
 
-            // Функция загрузки ширины столбцов
+            // Function to load column widths
             function loadColumnWidths() {
                 var widths = JSON.parse(localStorage.getItem('columnWidths'));
                 if (widths) {
@@ -426,8 +440,53 @@
                 }
             }
 
-            // Загрузка сохраненных ширин столбцов
+            // Load saved column widths
             loadColumnWidths();
+
+            // Add authorization check before showing upload modal
+            var uploadButton = document.getElementById('uploadFilesButton');
+            uploadButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                fetch('/check-session', {
+                    method: 'GET',
+                    credentials: 'include'
+                }).then(response => {
+                    if (response.ok) {
+                        // Open modal if authorized
+                        var modal = M.Modal.getInstance(document.getElementById('uploadModal'));
+                        modal.open();
+                    } else {
+                        // Redirect to login if not authorized
+                        window.location.href = '/login';
+                    }
+                }).catch(error => {
+                    console.error('Error checking session:', error);
+                    window.location.href = '/login';
+                });
+            });
+
+            // Add authorization check before showing create folder modal
+            var createFolderButton = document.getElementById('createFolderButton');
+            createFolderButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                fetch('/check-session', {
+                    method: 'GET',
+                    credentials: 'include'
+                }).then(response => {
+                    if (response.ok) {
+                        // Open modal if authorized
+                        var modal = M.Modal.getInstance(document.getElementById('createFolderModal'));
+                        modal.open();
+                    } else {
+                        // Redirect to login if not authorized
+                        window.location.href = '/login';
+                    }
+                }).catch(error => {
+                    console.error('Error checking session:', error);
+                    window.location.href = '/login';
+                });
+            });
+
         });
     </script>
 </body>

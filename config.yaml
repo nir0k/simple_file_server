@@ -1,0 +1,23 @@
+web-server:
+  # Base directory for the server
+  base_dir: "/home/ivan/Downloads/software"
+  # Port for the server
+  port: "8080"
+  # Protocol for the server
+  protocol: "https"
+  # SSL certificate file
+  ssl_cert_file: "./cert.pem"
+  # SSL key file
+  ssl_key_file: "./key.pem"
+# Logging configuration
+logging:
+  # Log path
+  log_file: "log/log.json"
+  # Log severity
+  log_severity: "trace"
+  # Log max size
+  log_max_size: 10
+  # Log max files
+  log_max_files: 10
+  # Log max age
+  log_max_age: 10

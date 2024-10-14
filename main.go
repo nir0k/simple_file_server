@@ -1,53 +1,66 @@
 package main
 
 import (
-    "archive/zip"
-    "encoding/json"
-    "flag"
-    "fmt"
-    "html/template"
-    "io"
-    "log"
-    "net/http"
-    "os"
-    "path"
-    "path/filepath"
-    "strings"
+	"archive/zip"
+	"flag"
+	"fmt"
+	"html/template"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
+	"path"
+	"path/filepath"
+	"simple_file_server/pkg"
+	"simple_file_server/pkg/auth"
+	"simple_file_server/pkg/logger"
+	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 var baseDir string
-var templates *template.Template
 
-// Config - structure for storing configuration
-type Config struct {
-    BaseDir      string `json:"base_dir"`
-    Port         string `json:"port"`
-    Protocol     string `json:"protocol"` // "http" or "https"
-    SSLCertFile  string `json:"ssl_cert_file,omitempty"`
-    SSLKeyFile   string `json:"ssl_key_file,omitempty"`
-}
-
-func main() {
+// setup - function for setting up the configuration
+func setup() (pkg.Config, error) {
     // Parsing command line arguments
-    configPath := flag.String("config", "config.json", "Path to the configuration file")
+    configPath := flag.String("config", "config.yaml", "Path to the configuration file")
     flag.Parse()
 
     // Reading and parsing the configuration file
-    var config Config
-    configFile, err := os.Open(*configPath)
-    if err != nil {
-        log.Fatalf("Error opening configuration file: %v", err)
+    var config pkg.Config
+    if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+        return config, fmt.Errorf("configuration file not found: %s", *configPath)
     }
-    defer configFile.Close()
-
-    decoder := json.NewDecoder(configFile)
-    err = decoder.Decode(&config)
+    // Reading the configuration file
+    configFile, err := os.ReadFile(*configPath)
     if err != nil {
-        log.Fatalf("Error parsing configuration file: %v", err)
+        return config, fmt.Errorf("error opening configuration file: %v", err)
+    }
+    // Parsing the configuration file
+    err = yaml.Unmarshal(configFile, &config)
+    if err != nil {
+        return config, fmt.Errorf("error parsing configuration file: %v", err)
     }
 
+    // Setting up logging
+    logger.LogSetup(config.Logging)
+
+    return config, nil
+
+}
+
+
+func main() {
+    // Setting up configuration
+    config, err := setup()
+    if err != nil {
+        logger.Logger.Fatalf("Error setting up configuration: %v", err)
+    }
     // Setting the base directory
-    baseDir = config.BaseDir
+    baseDir = config.WebServer.BaseDir
+    logger.Logger.Printf("Base directory: %s", baseDir)
 
     // Defining custom functions for templates
     funcMap := template.FuncMap{
@@ -85,13 +98,16 @@ func main() {
                 return "insert_drive_file"
             }
         },
+        // Function to get file information
         "getFileInfo": func(fullPath, name string) os.FileInfo {
             info, err := os.Stat(filepath.Join(fullPath, name))
             if err != nil {
+                logger.Logger.Trace("Error getting file info:", err)
                 return nil
             }
             return info
         },
+        // Function to get the readable size of the file
         "readableSize": func(info os.FileInfo) string {
             if info == nil {
                 return ""
@@ -112,14 +128,15 @@ func main() {
     }
 
     // Parsing all templates
-    templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("templates/*.html"))
+    pkg.Templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("templates/*.html"))
 
     fs := http.FileServer(http.Dir("./static"))
     http.Handle("/static/", http.StripPrefix("/static/", fs))
 
     // Routes without authentication
-    http.HandleFunc("/login", loginHandler)
-    http.HandleFunc("/logout", logoutHandler)
+    http.HandleFunc("/login", auth.LoginHandler)
+    http.HandleFunc("/logout", auth.LogoutHandler)
+    http.HandleFunc("/check-session", auth.CheckSessionHandler)
     http.HandleFunc("/", fileHandler)
     http.HandleFunc("/download", downloadHandler)
     
@@ -130,47 +147,40 @@ func main() {
     protected.HandleFunc("/create-folder", createFolderHandler)
 
     // Apply authorization only to upload, delete, and create actions
-    http.Handle("/upload", authMiddlewareForActions(protected))
-    http.Handle("/delete", authMiddlewareForActions(protected))
-    http.Handle("/create-folder", authMiddlewareForActions(protected))
+    http.Handle("/upload", auth.AuthMiddlewareForActions(protected))
+    http.Handle("/delete", auth.AuthMiddlewareForActions(protected))
+    http.Handle("/create-folder", auth.AuthMiddlewareForActions(protected))
 
-    addr := ":" + config.Port
+    addr := ":" + config.WebServer.Port
 
-    log.Printf("Server started at %s://localhost%s\n", config.Protocol, addr)
+    logger.Logger.Printf("Server started at %s://localhost%s\n", config.WebServer.Protocol, addr)
 
-    if config.Protocol == "https" {
-        if config.SSLCertFile == "" || config.SSLKeyFile == "" {
-            log.Fatal("For HTTPS, ssl_cert_file and ssl_key_file must be specified in the configuration")
+    if config.WebServer.Protocol == "https" {
+        if config.WebServer.SSLCert == "" || config.WebServer.SSLKey == "" {
+            logger.Logger.Fatal("For HTTPS, ssl_cert_file and ssl_key_file must be specified in the configuration")
         }
-        log.Fatal(http.ListenAndServeTLS(addr, config.SSLCertFile, config.SSLKeyFile, nil))
+        logger.Logger.Fatal(http.ListenAndServeTLS(addr, config.WebServer.SSLCert, config.WebServer.SSLKey, nil))
     } else {
-        log.Fatal(http.ListenAndServe(addr, nil))
+        logger.Logger.Fatal(http.ListenAndServe(addr, nil))
     }
 }
 
-// renderTemplate - function for rendering a template
-func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-    err := templates.ExecuteTemplate(w, tmpl, data)
-    if err != nil {
-        http.Error(w, "Error rendering template", http.StatusInternalServerError)
-        log.Println("Error rendering template:", err)
-    }
-}
-
+// fileHandler - handler for file requests
 func fileHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     reqPath := r.URL.Path
     fullPath := filepath.Join(baseDir, reqPath)
     info, err := os.Stat(fullPath)
     if err != nil {
         http.NotFound(w, r)
-        log.Println("Path not found:", fullPath)
+        logger.Logger.Printf("Path not found: %s from IP: %s", fullPath, clientIP)
         return
     }
 
     // Check if this is a directory
     if info.IsDir() {
         // If this is a directory and the slash is missing, redirect with adding a slash
-        if !strings.HasSuffix(reqPath, "/") {
+        if (!strings.HasSuffix(reqPath, "/")) {
             http.Redirect(w, r, reqPath+"/", http.StatusMovedPermanently)
             return
         }
@@ -178,7 +188,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
         files, err := os.ReadDir(fullPath)
         if err != nil {
             http.Error(w, "Error reading directory", http.StatusInternalServerError)
-            log.Println("Error reading directory:", err)
+            logger.Logger.Warnf("Error reading directory: %v from IP: %s", err, clientIP)
             return
         }
 
@@ -192,21 +202,32 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
             FullPath  string
             Files     []os.DirEntry
             ParentDir string
+            ModTimes  map[string]time.Time
         }{
             Path:      reqPath,
             FullPath:  fullPath,
             Files:     files,
             ParentDir: parentDir,
+            ModTimes:  make(map[string]time.Time),
         }
 
-        renderTemplate(w, "index.html", data)
+        for _, file := range files {
+            fileInfo, err := file.Info()
+            if err == nil {
+                data.ModTimes[file.Name()] = fileInfo.ModTime()
+            }
+        }
+
+        pkg.RenderTemplate(w, "index.html", data)
     } else {
+        logger.Logger.Infof("File served: %s to IP: %s", fullPath, clientIP)
         http.ServeFile(w, r, fullPath)
     }
 }
 
 // downloadHandler - handler for file download requests
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     r.ParseForm()
     items := r.Form["items"]
     if len(items) == 0 {
@@ -219,7 +240,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
         fullPath := filepath.Join(baseDir, item)
         info, err := os.Stat(fullPath)
         if err != nil {
-            log.Println("Error accessing item:", err)
+            logger.Logger.Errorf("error accessing item: %v from IP: %s", err, clientIP)
             continue
         }
         if !info.IsDir() {
@@ -234,6 +255,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 
     if len(files) == 1 {
         fullPath := filepath.Join(baseDir, files[0])
+        logger.Logger.Infof("File downloaded: %s by IP: %s", fullPath, clientIP)
         http.ServeFile(w, r, fullPath)
     } else {
         w.Header().Set("Content-Type", "application/zip")
@@ -245,7 +267,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
             fullPath := filepath.Join(baseDir, file)
             err := addFileToZip(zipWriter, fullPath, file)
             if err != nil {
-                log.Println("Error adding file to ZIP:", err)
+                logger.Logger.Errorf("error adding file to ZIP: %v", err)
             }
         }
     }
@@ -287,6 +309,7 @@ func addFileToZip(zipWriter *zip.Writer, filepath string, relPath string) error 
 
 // uploadHandler - handler for file upload requests
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     if r.Method != "POST" {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -304,6 +327,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
     err = os.MkdirAll(fullDestPath, os.ModePerm)
     if err != nil {
         http.Error(w, "Error creating directory", http.StatusInternalServerError)
+        logger.Logger.Errorf("Error creating directory: %v from IP: %s", err, clientIP)
         return
     }
 
@@ -312,6 +336,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         file, err := fileHeader.Open()
         if err != nil {
             http.Error(w, "Error getting file", http.StatusBadRequest)
+            logger.Logger.Errorf("Error getting file: %v from IP: %s", err, clientIP)
             return
         }
         defer file.Close()
@@ -320,6 +345,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         dst, err := os.Create(dstPath)
         if err != nil {
             http.Error(w, "Error saving file", http.StatusInternalServerError)
+            logger.Logger.Errorf("Error saving file: %v from IP: %s", err, clientIP)
             return
         }
         defer dst.Close()
@@ -327,8 +353,10 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         _, err = io.Copy(dst, file)
         if err != nil {
             http.Error(w, "Error saving file", http.StatusInternalServerError)
+            logger.Logger.Errorf("Error saving file: %v from IP: %s", err, clientIP)
             return
         }
+        logger.Logger.Infof("File uploaded: %s by IP: %s", dstPath, clientIP)
     }
 
     http.Redirect(w, r, reqPath, http.StatusSeeOther)
@@ -353,7 +381,7 @@ func createFolderHandler(w http.ResponseWriter, r *http.Request) {
     err := os.Mkdir(fullPath, os.ModePerm)
     if err != nil {
         http.Error(w, "Error creating folder", http.StatusInternalServerError)
-        log.Println("Error creating folder:", err)
+        logger.Logger.Errorf("Error creating folder: %v", err)
         return
     }
 
@@ -362,6 +390,7 @@ func createFolderHandler(w http.ResponseWriter, r *http.Request) {
 
 // deleteHandler - handler for deleting files and directories
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     if r.Method != "POST" {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -379,9 +408,10 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
         err := os.RemoveAll(fullPath)
         if err != nil {
             http.Error(w, "Error deleting item", http.StatusInternalServerError)
-            log.Println("Error deleting item:", err)
+            logger.Logger.Errorf("Error deleting item: %v from IP: %s", err, clientIP)
             return
         }
+        logger.Logger.Infof("Item deleted: %s by IP: %s", fullPath, clientIP)
     }
 
     reqPath := r.FormValue("currentPath")

@@ -27,10 +27,6 @@ go.work.sum
 # binary file
 file_server
 
-# Docker
-Dockerfile
-build.sh
-
 # Configurations
 config.json
 
@@ -47,3 +43,5 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
+log/log.*
+README_ru.md

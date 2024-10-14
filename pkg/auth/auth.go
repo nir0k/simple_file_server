@@ -1,13 +1,16 @@
-package main
+package auth
 
 import (
-    "fmt"
-    "log"
-    "net/http"
-    "strings"
-    "time"
+	"fmt"
+	"log"
+	"net/http"
+	"strings"
+	"time"
 
-    "github.com/msteinert/pam"
+	"simple_file_server/pkg"
+	"simple_file_server/pkg/logger"
+
+	"github.com/msteinert/pam"
 )
 
 // UserSession - represents a user session
@@ -21,10 +24,10 @@ var sessions = make(map[string]UserSession)
 
 // Configuration for sessions
 const sessionCookieName = "session_token"
-const sessionDuration = time.Hour * 1 // Session duration 1 hour
+const sessionDuration = time.Hour * 24 // Session duration 1 hour
 
-// pamAuthenticate - performs user authentication using PAM
-func pamAuthenticate(username, password string) error {
+// PamAuthenticate - performs user authentication using PAM
+func PamAuthenticate(username, password string) error {
     tx, err := pam.StartFunc("", username, func(s pam.Style, msg string) (string, error) {
         switch s {
         case pam.PromptEchoOff:
@@ -47,13 +50,13 @@ func pamAuthenticate(username, password string) error {
     return tx.Authenticate(0)
 }
 
-// generateSessionToken - generates a random token for the session
-func generateSessionToken() string {
+// GenerateSessionToken - generates a random token for the session
+func GenerateSessionToken() string {
     return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
-// isValidSessionToken - checks the validity of the session token
-func isValidSessionToken(token string) bool {
+// IsValidSessionToken - checks the validity of the session token
+func IsValidSessionToken(token string) bool {
     session, exists := sessions[token]
     if (!exists) {
         return false
@@ -65,11 +68,11 @@ func isValidSessionToken(token string) bool {
     return true
 }
 
-// authMiddlewareForActions - protects routes for certain actions
-func authMiddlewareForActions(next http.Handler) http.Handler {
+// AuthMiddlewareForActions - protects routes for certain actions
+func AuthMiddlewareForActions(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         cookie, err := r.Cookie(sessionCookieName)
-        if err != nil || !isValidSessionToken(cookie.Value) {
+        if err != nil || !IsValidSessionToken(cookie.Value) {
             http.Redirect(w, r, "/login", http.StatusSeeOther)
             return
         }
@@ -87,30 +90,32 @@ func authMiddlewareForActions(next http.Handler) http.Handler {
     })
 }
 
-// loginHandler - handles /login routes
-func loginHandler(w http.ResponseWriter, r *http.Request) {
+// LoginHandler - handles /login routes
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     if r.Method == "GET" {
         // Display the login form
-        renderTemplate(w, "login.html", nil)
+        pkg.RenderTemplate(w, "login.html", nil)
     } else if r.Method == "POST" {
         // Process form data
         username := r.FormValue("username")
         password := r.FormValue("password")
 
         // Authenticate the user using PAM
-        err := pamAuthenticate(username, password)
+        err := PamAuthenticate(username, password)
         if err != nil {
             data := struct {
                 Error string
             }{
                 Error: "Authentication failed. Please try again.",
             }
-            renderTemplate(w, "login.html", data)
+            pkg.RenderTemplate(w, "login.html", data)
+            logger.Logger.Warnf("Authentication failed for user: %s from IP: %s", username, clientIP)
             return
         }
 
         // Authentication was successful
-        sessionToken := generateSessionToken()
+        sessionToken := GenerateSessionToken()
         expiresAt := time.Now().Add(sessionDuration)
         sessions[sessionToken] = UserSession{
             Username: username,
@@ -126,14 +131,16 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
             HttpOnly: true,
         })
 
+        logger.Logger.Infof("User %s logged in successfully from IP: %s", username, clientIP)
         http.Redirect(w, r, "/", http.StatusSeeOther)
     } else {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
     }
 }
 
-// logoutHandler - handles /logout route
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
+// LogoutHandler - handles /logout route
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
     // Delete the session
     cookie, err := r.Cookie(sessionCookieName)
     if err == nil {
@@ -146,6 +153,17 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
             Expires:  time.Now().Add(-1 * time.Hour),
             HttpOnly: true,
         })
+        logger.Logger.Infof("User logged out successfully from IP: %s", clientIP)
     }
     http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// CheckSessionHandler - проверяет, действительна ли сессия
+func CheckSessionHandler(w http.ResponseWriter, r *http.Request) {
+    cookie, err := r.Cookie(sessionCookieName)
+    if err != nil || !IsValidSessionToken(cookie.Value) {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
 }
