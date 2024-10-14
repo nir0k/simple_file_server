@@ -1,4 +1,4 @@
-# Файловый Менеджер на Go
+# File server on Golang
 This project is a web application that implements a file manager with user authentication via PAM. The application supports both HTTP and HTTPS protocols.
 
 ## **Features**
