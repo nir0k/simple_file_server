@@ -10,7 +10,7 @@ import (
 	"simple_file_server/pkg"
 	"simple_file_server/pkg/logger"
 
-	"github.com/msteinert/pam"
+	"github.com/msteinert/pam"    
 )
 
 // UserSession - represents a user session

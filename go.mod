@@ -1,6 +1,8 @@
 module simple_file_server
 
-go 1.22.2
+go 1.23
+
+toolchain go1.23.2
 
 require (
 	github.com/msteinert/pam v1.2.0

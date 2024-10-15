@@ -115,6 +115,41 @@
         .dark-theme .breadcrumb {
             color: #ffffff; /* Light text color for dark theme */
         }
+        /* Dark theme styles */
+        .dark-theme .modal {
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+    
+        .dark-theme .modal .input-field input,
+        .dark-theme .modal .input-field label {
+            color: #ffffff;
+            border-bottom: 1px solid #ffffff;
+        }
+    
+        .dark-theme .modal .input-field input:focus {
+            border-bottom: 1px solid #42a5f5;
+            box-shadow: 0 1px 0 0 #42a5f5;
+        }
+    
+        .dark-theme .modal .file-field .btn,
+        .dark-theme .modal .btn {
+            background-color: #42a5f5;
+        }
+    
+        .dark-theme .modal .file-field .btn:hover,
+        .dark-theme .modal .btn:hover {
+            background-color: #64b5f6;
+        }
+    
+        .dark-theme .modal .file-path-wrapper input {
+            color: #ffffff;
+        }
+    
+        /* Adjust placeholder color */
+        .dark-theme ::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
     </style>
 </head>
 <body>
@@ -236,7 +271,11 @@
                             {{end}}
                         </td>
                         <td>{{if .IsDir}}Folder{{else}}File{{end}}</td>
-                        <td class="mod-time" data-mod-time="{{ index $.ModTimes .Name }}"></td>
+                        <td class="mod-time">
+                            {{ with $modTime := index $.ModTimes .Name }}
+                                {{ $modTime.Format "2006-01-02 15:04:05" }}
+                            {{ end }}
+                        </td>
                     </tr>
                     {{end}}
                 </tbody>
@@ -378,6 +417,7 @@
                     body.classList.add('light-theme');
                 }
                 localStorage.setItem('theme', theme);
+                M.updateTextFields(); // Reinitialize input labels
             }
 
             // Get saved theme from localStorage

@@ -21,7 +21,59 @@
             max-width: 400px;
             margin: 100px auto;
         }
-    </style>
+        /* Theme Styles */
+        body.light-theme {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        body.dark-theme {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        .dark-theme .input-field input,
+        .dark-theme .input-field label {
+            color: #ffffff;
+            border-bottom: 1px solid #ffffff;
+        }
+        .dark-theme .input-field input:focus {
+            border-bottom: 1px solid #42a5f5;
+            box-shadow: 0 1px 0 0 #42a5f5;
+        }
+        .dark-theme .btn {
+            background-color: #42a5f5;
+        }
+        .dark-theme .btn:hover {
+            background-color: #64b5f6;
+        }
+        /* Adjust placeholder color */
+        .dark-theme ::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .dark-theme .input-field input,
+        .dark-theme .input-field label {
+            color: #ffffff;
+        }
+
+        .dark-theme .input-field input:focus {
+            border-bottom: 1px solid #42a5f5;
+            box-shadow: 0 1px 0 0 #42a5f5;
+        }
+
+        .dark-theme .input-field .prefix.active {
+            color: #42a5f5;
+        }
+        .dark-theme .btn {
+            background-color: #42a5f5;
+        }
+        
+        .dark-theme .btn:hover {
+            background-color: #64b5f6;
+        }
+        .dark-theme .card-panel {
+            background-color: #d32f2f;
+            color: #ffffff;
+        }
+    </style>    
 </head>
 <body>
     <div class="login-container">
@@ -43,5 +95,39 @@
     </div>
     <!-- Materialize JS -->
     <script src="/static/js/materialize.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var body = document.body;
+
+            // Function to set theme
+            function setTheme(theme) {
+                if (theme === 'dark') {
+                    body.classList.remove('light-theme');
+                    body.classList.add('dark-theme');
+                } else {
+                    body.classList.remove('dark-theme');
+                    body.classList.add('light-theme');
+                }
+                localStorage.setItem('theme', theme);
+                M.updateTextFields(); // Reinitialize input labels
+            }
+
+            // Get saved theme from localStorage
+            var savedTheme = localStorage.getItem('theme') || 'light';
+            setTheme(savedTheme);
+
+            // Theme toggle functionality
+            var themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    var currentTheme = body.classList.contains('dark-theme') ? 'dark' : 'light';
+                    var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    setTheme(newTheme);
+                });
+            }
+        });
+    </script>
+
 </body>
 </html>
