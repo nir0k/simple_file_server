@@ -23,7 +23,7 @@ type UserSession struct {
 var sessions = make(map[string]UserSession)
 
 // Configuration for sessions
-const sessionCookieName = "session_token"
+const SessionCookieName = "session_token"
 const sessionDuration = time.Hour * 24 // Session duration 1 hour
 
 // PamAuthenticate - performs user authentication using PAM
@@ -71,11 +71,15 @@ func IsValidSessionToken(token string) bool {
 // AuthMiddlewareForActions - protects routes for certain actions
 func AuthMiddlewareForActions(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        cookie, err := r.Cookie(sessionCookieName)
+        cookie, err := r.Cookie(SessionCookieName)
         if err != nil || !IsValidSessionToken(cookie.Value) {
             http.Redirect(w, r, "/login", http.StatusSeeOther)
             return
         }
+
+        // Извлекаем имя пользователя из сессии
+        session := sessions[cookie.Value]
+        r.Header.Set("X-User", session.Username)
 
         // Check if the user is trying to perform an action that requires authorization
         if r.Method == "POST" && (strings.HasPrefix(r.URL.Path, "/upload") ||
@@ -124,7 +128,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
         // Set the session cookie
         http.SetCookie(w, &http.Cookie{
-            Name:     sessionCookieName,
+            Name:     SessionCookieName,
             Value:    sessionToken,
             Path:     "/",
             Expires:  expiresAt,
@@ -139,15 +143,33 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // LogoutHandler - handles /logout route
+// func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+//     clientIP := r.RemoteAddr
+//     // Delete the session
+//     cookie, err := r.Cookie(sessionCookieName)
+//     if err == nil {
+//         delete(sessions, cookie.Value)
+//         // Delete the cookie
+//         http.SetCookie(w, &http.Cookie{
+//             Name:     sessionCookieName,
+//             Value:    "",
+//             Path:     "/",
+//             Expires:  time.Now().Add(-1 * time.Hour),
+//             HttpOnly: true,
+//         })
+//         logger.Logger.Infof("User logged out successfully from IP: %s", clientIP)
+//     }
+//     http.Redirect(w, r, "/login", http.StatusSeeOther)
+// }
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
     // Delete the session
-    cookie, err := r.Cookie(sessionCookieName)
+    cookie, err := r.Cookie(SessionCookieName)
     if err == nil {
         delete(sessions, cookie.Value)
         // Delete the cookie
         http.SetCookie(w, &http.Cookie{
-            Name:     sessionCookieName,
+            Name:     SessionCookieName,
             Value:    "",
             Path:     "/",
             Expires:  time.Now().Add(-1 * time.Hour),
@@ -155,12 +177,17 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
         })
         logger.Logger.Infof("User logged out successfully from IP: %s", clientIP)
     }
-    http.Redirect(w, r, "/login", http.StatusSeeOther)
+    // Возвращаем пользователя на предыдущую страницу
+    referer := r.Referer()
+    if referer == "" || referer == "/logout" {
+        referer = "/"
+    }
+    http.Redirect(w, r, referer, http.StatusSeeOther)
 }
 
 // CheckSessionHandler - проверяет, действительна ли сессия
 func CheckSessionHandler(w http.ResponseWriter, r *http.Request) {
-    cookie, err := r.Cookie(sessionCookieName)
+    cookie, err := r.Cookie(SessionCookieName)
     if err != nil || !IsValidSessionToken(cookie.Value) {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return

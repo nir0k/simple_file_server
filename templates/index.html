@@ -159,16 +159,24 @@
             <!-- Buttons on the right side of the navigation -->
             <ul id="nav-mobile" class="right">
                 <li>
-                    <a href="#" id="themeToggle">
+                    <a href="#" id="themeToggle" data-tooltip="Toggle Theme" class="tooltipped">
                         <i class="material-icons">brightness_6</i>
                     </a>
                 </li>
+                {{if .IsLoggedIn}}
                 <li>
-                    <a href="/logout">
+                    <a href="/logout" data-tooltip="Logout" class="tooltipped">
                         <i class="material-icons">exit_to_app</i>
                     </a>
                 </li>
-            </ul>
+                {{else}}
+                <li>
+                    <a href="/login" data-tooltip="Login" class="tooltipped">
+                        <i class="material-icons">login</i>
+                    </a>
+                </li>
+                {{end}}
+            </ul>            
         </div>
     </nav>
 
@@ -192,9 +200,15 @@
 
         <!-- Buttons -->
         <div style="margin-top: 20px;">
-            <a href="#" class="waves-effect waves-light btn" id="uploadFilesButton">Upload Files</a>
-            <a href="#" class="waves-effect waves-light btn" id="createFolderButton">Create Folder</a>
-            <button id="deleteButton" class="btn red" disabled>Delete</button>
+            <a href="#" class="waves-effect waves-light btn tooltipped" id="uploadFilesButton" data-tooltip="Upload Files">
+                Upload Files
+            </a>
+            <a href="#" class="waves-effect waves-light btn tooltipped" id="createFolderButton" data-tooltip="Create Folder">
+                Create Folder
+            </a>
+            <button id="deleteButton" class="btn red tooltipped" data-tooltip="Delete Selected Items" disabled>
+                Delete
+            </button>
         </div>
 
         <!-- File table -->
@@ -333,6 +347,10 @@
             // Initialize modals
             var modals = document.querySelectorAll('.modal');
             M.Modal.init(modals);
+
+            // Initialize tooltips
+            var tooltippedElements = document.querySelectorAll('.tooltipped');
+            M.Tooltip.init(tooltippedElements);
 
             // Initialize checkboxes
             var selectAllCheckbox = document.getElementById('selectAll');

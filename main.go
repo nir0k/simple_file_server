@@ -166,6 +166,64 @@ func main() {
 }
 
 // fileHandler - handler for file requests
+// func fileHandler(w http.ResponseWriter, r *http.Request) {
+//     clientIP := r.RemoteAddr
+//     reqPath := r.URL.Path
+//     fullPath := filepath.Join(baseDir, reqPath)
+//     info, err := os.Stat(fullPath)
+//     if err != nil {
+//         http.NotFound(w, r)
+//         logger.Logger.Printf("Path not found: %s from IP: %s", fullPath, clientIP)
+//         return
+//     }
+
+//     // Check if this is a directory
+//     if info.IsDir() {
+//         // If this is a directory and the slash is missing, redirect with adding a slash
+//         if (!strings.HasSuffix(reqPath, "/")) {
+//             http.Redirect(w, r, reqPath+"/", http.StatusMovedPermanently)
+//             return
+//         }
+
+//         files, err := os.ReadDir(fullPath)
+//         if err != nil {
+//             http.Error(w, "Error reading directory", http.StatusInternalServerError)
+//             logger.Logger.Warnf("Error reading directory: %v from IP: %s", err, clientIP)
+//             return
+//         }
+
+//         var parentDir string
+//         if reqPath != "/" {
+//             parentDir = path.Clean("/" + path.Join(reqPath, ".."))
+//         }
+
+//         data := struct {
+//             Path      string
+//             FullPath  string
+//             Files     []os.DirEntry
+//             ParentDir string
+//             ModTimes  map[string]time.Time
+//         }{
+//             Path:      reqPath,
+//             FullPath:  fullPath,
+//             Files:     files,
+//             ParentDir: parentDir,
+//             ModTimes:  make(map[string]time.Time),
+//         }
+
+//         for _, file := range files {
+//             fileInfo, err := file.Info()
+//             if err == nil {
+//                 data.ModTimes[file.Name()] = fileInfo.ModTime()
+//             }
+//         }
+
+//         pkg.RenderTemplate(w, "index.html", data)
+//     } else {
+//         logger.Logger.Infof("File served: %s to IP: %s", fullPath, clientIP)
+//         http.ServeFile(w, r, fullPath)
+//     }
+// }
 func fileHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
     reqPath := r.URL.Path
@@ -177,10 +235,18 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Определяем, залогинен ли пользователь
+    isLoggedIn := false
+    if cookie, err := r.Cookie(auth.SessionCookieName); err == nil {
+        if auth.IsValidSessionToken(cookie.Value) {
+            isLoggedIn = true
+        }
+    }
+
     // Check if this is a directory
     if info.IsDir() {
         // If this is a directory and the slash is missing, redirect with adding a slash
-        if (!strings.HasSuffix(reqPath, "/")) {
+        if !strings.HasSuffix(reqPath, "/") {
             http.Redirect(w, r, reqPath+"/", http.StatusMovedPermanently)
             return
         }
@@ -198,17 +264,19 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
         }
 
         data := struct {
-            Path      string
-            FullPath  string
-            Files     []os.DirEntry
-            ParentDir string
-            ModTimes  map[string]time.Time
+            Path       string
+            FullPath   string
+            Files      []os.DirEntry
+            ParentDir  string
+            ModTimes   map[string]time.Time
+            IsLoggedIn bool
         }{
-            Path:      reqPath,
-            FullPath:  fullPath,
-            Files:     files,
-            ParentDir: parentDir,
-            ModTimes:  make(map[string]time.Time),
+            Path:       reqPath,
+            FullPath:   fullPath,
+            Files:      files,
+            ParentDir:  parentDir,
+            ModTimes:   make(map[string]time.Time),
+            IsLoggedIn: isLoggedIn,
         }
 
         for _, file := range files {
@@ -310,6 +378,7 @@ func addFileToZip(zipWriter *zip.Writer, filepath string, relPath string) error 
 // uploadHandler - handler for file upload requests
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
+    user := r.Header.Get("X-User")
     if r.Method != "POST" {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -327,7 +396,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
     err = os.MkdirAll(fullDestPath, os.ModePerm)
     if err != nil {
         http.Error(w, "Error creating directory", http.StatusInternalServerError)
-        logger.Logger.Errorf("Error creating directory: %v from IP: %s", err, clientIP)
+        logger.Logger.Errorf("Error creating directory: %v from IP: %s, User: %s", err, clientIP, user)
         return
     }
 
@@ -336,7 +405,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         file, err := fileHeader.Open()
         if err != nil {
             http.Error(w, "Error getting file", http.StatusBadRequest)
-            logger.Logger.Errorf("Error getting file: %v from IP: %s", err, clientIP)
+            logger.Logger.Errorf("Error getting file: %v from IP: %s, User: %s", err, clientIP, user)
             return
         }
         defer file.Close()
@@ -345,7 +414,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         dst, err := os.Create(dstPath)
         if err != nil {
             http.Error(w, "Error saving file", http.StatusInternalServerError)
-            logger.Logger.Errorf("Error saving file: %v from IP: %s", err, clientIP)
+            logger.Logger.Errorf("Error saving file: %v from IP: %s, User: %s", err, clientIP, user)
             return
         }
         defer dst.Close()
@@ -353,10 +422,10 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
         _, err = io.Copy(dst, file)
         if err != nil {
             http.Error(w, "Error saving file", http.StatusInternalServerError)
-            logger.Logger.Errorf("Error saving file: %v from IP: %s", err, clientIP)
+            logger.Logger.Errorf("Error saving file: %v from IP: %s, User: %s", err, clientIP, user)
             return
         }
-        logger.Logger.Infof("File uploaded: %s by IP: %s", dstPath, clientIP)
+        logger.Logger.Infof("File uploaded: %s by IP: %s, User: %s", dstPath, clientIP, user)
     }
 
     http.Redirect(w, r, reqPath, http.StatusSeeOther)
@@ -364,6 +433,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // createFolderHandler - handler for creating directories
 func createFolderHandler(w http.ResponseWriter, r *http.Request) {
+    clientIP := r.RemoteAddr
+    user := r.Header.Get("X-User")
     if r.Method != "POST" {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -381,9 +452,10 @@ func createFolderHandler(w http.ResponseWriter, r *http.Request) {
     err := os.Mkdir(fullPath, os.ModePerm)
     if err != nil {
         http.Error(w, "Error creating folder", http.StatusInternalServerError)
-        logger.Logger.Errorf("Error creating folder: %v", err)
+        logger.Logger.Errorf("Error creating folder: %v from IP: %s, User: %s", err, clientIP, user)
         return
     }
+    logger.Logger.Infof("Folder created: %s by IP: %s, User: %s", fullPath, clientIP, user)
 
     http.Redirect(w, r, reqPath, http.StatusSeeOther)
 }
@@ -391,6 +463,7 @@ func createFolderHandler(w http.ResponseWriter, r *http.Request) {
 // deleteHandler - handler for deleting files and directories
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
+    user := r.Header.Get("X-User")
     if r.Method != "POST" {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -405,15 +478,40 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 
     for _, item := range items {
         fullPath := filepath.Join(baseDir, item)
-        err := os.RemoveAll(fullPath)
+        err := logAndRemoveAll(fullPath, clientIP, user)
         if err != nil {
             http.Error(w, "Error deleting item", http.StatusInternalServerError)
-            logger.Logger.Errorf("Error deleting item: %v from IP: %s", err, clientIP)
+            logger.Logger.Errorf("Error deleting item: %v from IP: %s, User: %s", err, clientIP, user)
             return
         }
-        logger.Logger.Infof("Item deleted: %s by IP: %s", fullPath, clientIP)
+        logger.Logger.Infof("Item deleted: %s by IP: %s, User: %s", fullPath, clientIP, user)
     }
 
     reqPath := r.FormValue("currentPath")
     http.Redirect(w, r, reqPath, http.StatusSeeOther)
+}
+
+// logAndRemoveAll - recursive function to log and remove all files and directories
+func logAndRemoveAll(path, clientIP, user string) error {
+    info, err := os.Stat(path)
+    if err != nil {
+        return err
+    }
+
+    if info.IsDir() {
+        entries, err := os.ReadDir(path)
+        if err != nil {
+            return err
+        }
+
+        for _, entry := range entries {
+            err = logAndRemoveAll(filepath.Join(path, entry.Name()), clientIP, user)
+            if err != nil {
+                return err
+            }
+        }
+    }
+
+    logger.Logger.Infof("Deleting: %s by IP: %s, User: %s", path, clientIP, user)
+    return os.RemoveAll(path)
 }
