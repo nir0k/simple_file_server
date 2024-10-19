@@ -150,6 +150,32 @@
         .dark-theme ::placeholder {
             color: rgba(255, 255, 255, 0.7);
         }
+
+        .readme-content {
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .dark-theme .readme-content {
+            background-color: #1e1e1e;
+        }
+        /* Additional styles for Markdown content */
+        .readme-content h1,
+        .readme-content h2,
+        .readme-content h3 {
+            font-weight: bold;
+        }
+        .readme-content p {
+            line-height: 1.6;
+        }
+        .readme-content pre {
+            background-color: #e0e0e0;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        .dark-theme .readme-content pre {
+            background-color: #2e2e2e;
+        }
     </style>
 </head>
 <body>
@@ -296,6 +322,13 @@
             </table>
             <button type="submit" id="downloadButton" class="btn green" disabled>Download Selected Files</button>
         </form>
+
+        <!-- Readme Content -->
+        {{ if .ReadmeHTML }}
+        <div class="readme-content" style="margin-top: 40px;">
+            {{ .ReadmeHTML }}
+        </div>
+        {{ end }}
 
         <!-- Upload Modal -->
         <div id="uploadModal" class="modal">

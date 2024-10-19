@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"flag"
 	"fmt"
 	"html/template"
@@ -17,6 +18,7 @@ import (
 	"simple_file_server/pkg/logger"
 	"strings"
 
+	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v2"
 )
 
@@ -165,65 +167,6 @@ func main() {
     }
 }
 
-// fileHandler - handler for file requests
-// func fileHandler(w http.ResponseWriter, r *http.Request) {
-//     clientIP := r.RemoteAddr
-//     reqPath := r.URL.Path
-//     fullPath := filepath.Join(baseDir, reqPath)
-//     info, err := os.Stat(fullPath)
-//     if err != nil {
-//         http.NotFound(w, r)
-//         logger.Logger.Printf("Path not found: %s from IP: %s", fullPath, clientIP)
-//         return
-//     }
-
-//     // Check if this is a directory
-//     if info.IsDir() {
-//         // If this is a directory and the slash is missing, redirect with adding a slash
-//         if (!strings.HasSuffix(reqPath, "/")) {
-//             http.Redirect(w, r, reqPath+"/", http.StatusMovedPermanently)
-//             return
-//         }
-
-//         files, err := os.ReadDir(fullPath)
-//         if err != nil {
-//             http.Error(w, "Error reading directory", http.StatusInternalServerError)
-//             logger.Logger.Warnf("Error reading directory: %v from IP: %s", err, clientIP)
-//             return
-//         }
-
-//         var parentDir string
-//         if reqPath != "/" {
-//             parentDir = path.Clean("/" + path.Join(reqPath, ".."))
-//         }
-
-//         data := struct {
-//             Path      string
-//             FullPath  string
-//             Files     []os.DirEntry
-//             ParentDir string
-//             ModTimes  map[string]time.Time
-//         }{
-//             Path:      reqPath,
-//             FullPath:  fullPath,
-//             Files:     files,
-//             ParentDir: parentDir,
-//             ModTimes:  make(map[string]time.Time),
-//         }
-
-//         for _, file := range files {
-//             fileInfo, err := file.Info()
-//             if err == nil {
-//                 data.ModTimes[file.Name()] = fileInfo.ModTime()
-//             }
-//         }
-
-//         pkg.RenderTemplate(w, "index.html", data)
-//     } else {
-//         logger.Logger.Infof("File served: %s to IP: %s", fullPath, clientIP)
-//         http.ServeFile(w, r, fullPath)
-//     }
-// }
 func fileHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
     reqPath := r.URL.Path
@@ -235,7 +178,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Определяем, залогинен ли пользователь
+    // Determine if the user is logged in
     isLoggedIn := false
     if cookie, err := r.Cookie(auth.SessionCookieName); err == nil {
         if auth.IsValidSessionToken(cookie.Value) {
@@ -243,9 +186,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    // Check if this is a directory
     if info.IsDir() {
-        // If this is a directory and the slash is missing, redirect with adding a slash
         if !strings.HasSuffix(reqPath, "/") {
             http.Redirect(w, r, reqPath+"/", http.StatusMovedPermanently)
             return
@@ -263,6 +204,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
             parentDir = path.Clean("/" + path.Join(reqPath, ".."))
         }
 
+        // Initialize the data struct with an additional field for ReadmeHTML
         data := struct {
             Path       string
             FullPath   string
@@ -270,6 +212,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
             ParentDir  string
             ModTimes   map[string]time.Time
             IsLoggedIn bool
+            ReadmeHTML template.HTML // New field
         }{
             Path:       reqPath,
             FullPath:   fullPath,
@@ -277,12 +220,30 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
             ParentDir:  parentDir,
             ModTimes:   make(map[string]time.Time),
             IsLoggedIn: isLoggedIn,
+            ReadmeHTML: "", // Initialize to empty
         }
 
         for _, file := range files {
             fileInfo, err := file.Info()
             if err == nil {
                 data.ModTimes[file.Name()] = fileInfo.ModTime()
+            }
+        }
+
+        // Check if readme.md exists in the directory
+        readmePath := filepath.Join(fullPath, "README.md")
+        if _, err := os.Stat(readmePath); err == nil {
+            // readme.md exists, read and convert it
+            content, err := os.ReadFile(readmePath)
+            if err == nil {
+                var buf bytes.Buffer
+                if err := goldmark.Convert(content, &buf); err == nil {
+                    data.ReadmeHTML = template.HTML(buf.String())
+                } else {
+                    logger.Logger.Warnf("Error converting Markdown to HTML: %v", err)
+                }
+            } else {
+                logger.Logger.Warnf("Error reading readme.md: %v", err)
             }
         }
 

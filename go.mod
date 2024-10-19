@@ -11,6 +11,8 @@ require (
 
 require gopkg.in/yaml.v2 v2.4.0
 
+require github.com/yuin/goldmark v1.7.8
+
 require (
 	golang.org/x/sys v0.6.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

@@ -142,25 +142,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-// LogoutHandler - handles /logout route
-// func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-//     clientIP := r.RemoteAddr
-//     // Delete the session
-//     cookie, err := r.Cookie(sessionCookieName)
-//     if err == nil {
-//         delete(sessions, cookie.Value)
-//         // Delete the cookie
-//         http.SetCookie(w, &http.Cookie{
-//             Name:     sessionCookieName,
-//             Value:    "",
-//             Path:     "/",
-//             Expires:  time.Now().Add(-1 * time.Hour),
-//             HttpOnly: true,
-//         })
-//         logger.Logger.Infof("User logged out successfully from IP: %s", clientIP)
-//     }
-//     http.Redirect(w, r, "/login", http.StatusSeeOther)
-// }
+// LogoutHandler - handles /logout routes
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := r.RemoteAddr
     // Delete the session
